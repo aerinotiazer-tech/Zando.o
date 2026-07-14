@@ -126,6 +126,7 @@ export default function AuthViews({ currentSubView, onNavigate, onLoginSuccess }
         email,
         password,
         options: {
+          emailRedirectTo: `${window.location.origin}/`,
           data: {
             full_name: name,
             role: role
@@ -185,12 +186,52 @@ export default function AuthViews({ currentSubView, onNavigate, onLoginSuccess }
     }, 800);
   };
 
-  const handleResendEmail = () => {
+  const handleResendEmail = async () => {
     setResendStatus('sending');
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      try {
+        await supabase.auth.resend({
+          type: 'signup',
+          email: verificationEmail,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+          }
+        });
+      } catch (err) {
+        console.error('Error resending email', err);
+      }
+    }
+    
     setTimeout(() => {
       setResendStatus('sent');
       setTimeout(() => setResendStatus('idle'), 3000);
     }, 1000);
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/update-password`,
+      });
+
+      if (error) throw error;
+      
+      // Visual feedback
+      onNavigate('auth', 'login');
+    } catch (err: any) {
+      console.error('Reset password error:', err);
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+         onNavigate('auth', 'login');
+      } else {
+        setError(err.message || 'Échec de la réinitialisation');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -560,7 +601,7 @@ export default function AuthViews({ currentSubView, onNavigate, onLoginSuccess }
                 <p className="text-xs text-slate-500">Nous vous enverrons un lien de réinitialisation sécurisé.</p>
               </div>
 
-              <form onSubmit={(e) => { e.preventDefault(); onNavigate('auth', 'login'); }} className="space-y-4">
+              <form onSubmit={handleResetPassword} className="space-y-4">
                 <div className="space-y-1">
                   <label className="block text-[10px] text-slate-400 uppercase tracking-wide">Adresse email liée</label>
                   <div className="relative">
@@ -568,17 +609,72 @@ export default function AuthViews({ currentSubView, onNavigate, onLoginSuccess }
                     <input 
                       type="email" 
                       required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       placeholder="nom@exemple.com"
                       className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-[#0066FF]"
                     />
                   </div>
                 </div>
 
+                {error && <p className="text-[11px] text-red-500 font-medium text-center">{error}</p>}
+
                 <button 
                   type="submit"
-                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold tracking-wider uppercase transition-colors"
+                  disabled={isLoading}
+                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white rounded-xl text-xs font-semibold tracking-wider uppercase transition-colors flex items-center justify-center gap-1.5"
                 >
-                  Envoyer le lien de secours
+                  {isLoading ? 'Envoi...' : 'Envoyer le lien de secours'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* UPDATE PASSWORD */}
+          {currentSubView === 'update-password' && (
+            <div className="bg-white/95 backdrop-blur-md p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6 bg-gradient-to-b from-white to-[#FCFAF7]">
+              <div className="text-center space-y-2">
+                <h1 className="text-xl font-display font-semibold text-slate-950">Mettre à jour le mot de passe</h1>
+                <p className="text-xs text-slate-500">Veuillez saisir votre nouveau mot de passe.</p>
+              </div>
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                setError('');
+                setIsLoading(true);
+                try {
+                  const { error } = await supabase.auth.updateUser({ password });
+                  if (error) throw error;
+                  onNavigate('dashboard', 'home');
+                } catch (err: any) {
+                  setError(err.message || 'Échec de la mise à jour');
+                } finally {
+                  setIsLoading(false);
+                }
+              }} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="block text-[10px] text-slate-400 uppercase tracking-wide">Nouveau mot de passe</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                    <input 
+                      type="password" 
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-[#0066FF]"
+                    />
+                  </div>
+                </div>
+
+                {error && <p className="text-[11px] text-red-500 font-medium text-center">{error}</p>}
+
+                <button 
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3 bg-[#0066FF] hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl text-xs font-semibold tracking-wider uppercase transition-colors"
+                >
+                  {isLoading ? 'Mise à jour...' : 'Mettre à jour'}
                 </button>
               </form>
             </div>

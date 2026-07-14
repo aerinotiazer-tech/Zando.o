@@ -46,6 +46,13 @@ export default function Home() {
   // Initialize data on client load
   useEffect(() => {
     let mounted = true;
+    
+    // Check for password recovery hash
+    if (window.location.hash.includes('type=recovery')) {
+      setCurrentView('auth');
+      setCurrentSubView('update-password');
+    }
+
     import('../lib/api').then(({ api }) => {
       // 1. Fetch public data immediately
       Promise.all([
